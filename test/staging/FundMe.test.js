@@ -1,37 +1,78 @@
-// import { MockV3AggregatorInterface } from "../../src/types/@chainlink/contracts/src/v0.8/tests/MockV3Aggregator"
-// import { FundMe } from "../../typechain-types"
-
 const { assert, expect } = require("chai")
+const { getNamedAccounts, ethers, network } = require("hardhat")
 const { developmentChains } = require("../../helper-hardhat-config")
-const { deployments, ethers, getNamedAccounts } = require("hardhat")
 
 developmentChains.includes(network.name)
       ? describe.skip
-      : describe("FundMe staging", async function () {
-              let fundMe
-              let deployerAddress
-              const sendValue = ethers.parseEther("0.01")
+      : describe("Raffle Staging Tests", function () {
+              let raffle, raffleEntranceFee, deployer
 
               beforeEach(async function () {
-                    deployerAddress = (await getNamedAccounts()).deployer
-                    await deployments.fixture(["all"])
-                    console.log(deployerAddress)
-
-                    fundMe = await ethers.getContract("FundMe", deployerAddress)
-                    deployer = await ethers.getSigner(deployerAddress)
-                    console.log(deployer)
+                    deployer = (await getNamedAccounts()).deployer
+                    raffle = await ethers.getContract("Raffle", deployer)
+                    raffleEntranceFee = await raffle.getEntranceFee()
               })
 
-              it("withdraw ETH from a single funder", async () => {
-                    const address = await fundMe.getAddress()
+              describe("fulfillRandomWords", function () {
+                    it("works with live Chainlink Keepers and Chainlink VRF, we get a random winner", async function () {
+                          // enter the raffle
+                          console.log("Setting up test...")
+                          const startingTimeStamp =
+                                await raffle.getLastTimeStamp()
+                          const accounts = await ethers.getSigners()
 
-                    await fundMe.fund({ value: sendValue })
-                    const transactionResponse = await fundMe.withdraw()
-                    const transactionReceipt = await transactionResponse.wait(1)
+                          console.log("Setting up Listener...")
+                          await new Promise(async (resolve, reject) => {
+                                // setup listener before we enter the raffle
+                                // Just in case the blockchain moves REALLY fast
+                                raffle.once("WinnerPicked", async () => {
+                                      console.log("WinnerPicked event fired!")
+                                      try {
+                                            // add our asserts here
+                                            const recentWinner =
+                                                  await raffle.getRecentWinner()
+                                            const raffleState =
+                                                  await raffle.getRaffleState()
+                                            const winnerEndingBalance =
+                                                  await accounts[0].getBalance()
+                                            const endingTimeStamp =
+                                                  await raffle.getLastTimeStamp()
 
-                    const endingFundMeBalance =
-                          await ethers.provider.getBalance(address)
+                                            await expect(raffle.getPlayer(0)).to
+                                                  .be.reverted
+                                            assert.equal(
+                                                  recentWinner.toString(),
+                                                  accounts[0].address
+                                            )
+                                            assert.equal(raffleState, 0)
+                                            assert.equal(
+                                                  winnerEndingBalance.toString(),
+                                                  winnerStartingBalance
+                                                        .add(raffleEntranceFee)
+                                                        .toString()
+                                            )
+                                            assert(
+                                                  endingTimeStamp >
+                                                        startingTimeStamp
+                                            )
+                                            resolve()
+                                      } catch (error) {
+                                            console.log(error)
+                                            reject(error)
+                                      }
+                                })
+                                // Then entering the raffle
+                                console.log("Entering Raffle...")
+                                const tx = await raffle.enterRaffle({
+                                      value: raffleEntranceFee,
+                                })
+                                await tx.wait(1)
+                                console.log("Ok, time to wait...")
+                                const winnerStartingBalance =
+                                      await accounts[0].getBalance()
 
-                    assert.equal(endingFundMeBalance, 0)
+                                // and this code WONT complete until our listener has finished listening!
+                          })
+                    })
               })
         })

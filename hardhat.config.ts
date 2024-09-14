@@ -1,22 +1,24 @@
-import { HardhatUserConfig } from "hardhat/config"
-import "@nomicfoundation/hardhat-toolbox"
-import "@nomiclabs/hardhat-ethers"
-import "dotenv/config"
-import "hardhat-gas-reporter"
-import "hardhat-deploy"
+
+require("@nomiclabs/hardhat-waffle")
+require("@nomicfoundation/hardhat-verify")
+require("hardhat-deploy")
+require("solidity-coverage")
+require("hardhat-gas-reporter")
+require("hardhat-contract-sizer")
+require("dotenv").config()
 
 const SEPOLIA_RPC_URL = process.env.RPC_URL
 const PRIVATE_KEY = process.env.PRIVATE_KEY
 const COINMARKETCAP_API_KEY = process.env.COINMARKETCAP_API_KEY
 
-const config: HardhatUserConfig = {
-      solidity: "0.8.19",
+const config = {
+      solidity: "0.8.8",
       defaultNetwork: "hardhat",
       networks: {
             sepolia: {
                   url: SEPOLIA_RPC_URL!,
                   accounts: [PRIVATE_KEY!],
-                  chainId: 11011,
+                  chainId: 11155111,
             },
       },
       typechain: {
@@ -29,7 +31,8 @@ const config: HardhatUserConfig = {
 
       etherscan: {
             apiKey: process.env.ETHERSCAN_API_KEY,
-      },
+            customChains: [],
+        },
       gasReporter: {
             currency: "USD",
             enabled: true,
@@ -47,6 +50,9 @@ const config: HardhatUserConfig = {
                   default: 1,
             },
       },
+      mocha: {
+            timeout: 200000
+      }
 }
 
 export default config
